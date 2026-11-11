@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0f0f12">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https: wss: ws://localhost:* ws://127.0.0.1:*; media-src blob: mediastream:; img-src data: blob:; base-uri 'none'; form-action 'none'">
+<title>Videollamada · Texas Cleaning Services</title>
+<!-- One page for both sides of a Texas Cleaning Services video call. The call's details come after the # in the link
+     (u = the room server, t = the pass for this call, c=1 = ask for the camera, h=1 = the organizer's own view), so they
+     never reach this site's server. Nothing here is sent anywhere but the call room. -->
+<style>
+  :root {
+    --page: #0f0f12; --card: #1b1b20; --card2: #24242b; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14);
+    --text: #f4f4f5; --soft: #a1a1aa; --faint: #71717a;
+    --ember: #ff7a4d; --emberA: #ec5b2b; --emberB: #bc4720; --good: #5fd97a; --warn: #ffb340; --bad: #ff6961;
+    --radius: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
+  body {
+    min-height: 100dvh; display: flex; flex-direction: column;
+    background:
+      radial-gradient(120% 60% at 50% -10%, rgba(255,122,77,.20), rgba(255,122,77,0) 60%),
+      radial-gradient(80% 50% at 100% 0%, rgba(188,71,32,.14), rgba(188,71,32,0) 70%),
+      var(--page);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  button { font: inherit; color: inherit; }
+  .hidden { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; max-width: 1100px; width: 100%; margin: 0 auto; }
+  .mark {
+    width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center;
+    background: linear-gradient(180deg, var(--emberA), var(--emberB));
+    box-shadow: 0 4px 16px rgba(236,91,43,.35), inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  .brand { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+  .brand b { font-size: 15px; font-weight: 650; letter-spacing: .2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand span { font-size: 12px; color: var(--soft); }
+  .pills { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .pill {
+    font-size: 11.5px; color: var(--soft); padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+    background: rgba(255,255,255,.05); border: 1px solid var(--line);
+  }
+  .pill i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--faint); vertical-align: 1px; }
+  .pill.on i { background: var(--good); box-shadow: 0 0 6px var(--good); }
+  .pill.wait i { background: var(--warn); }
+
+  main { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 4px 16px 12px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .stage {
+    position: relative; flex: 1; min-height: 300px; border-radius: var(--radius); overflow: hidden;
+    background: linear-gradient(180deg, #17171c, #101014);
+    border: 1px solid var(--line);
+    box-shadow: 0 20px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .stage::after {      /* the glossy edge */
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0) 22%);
+  }
+  .stage video.main { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .28s ease; background: #000; }
+  .stage video.main.shown { opacity: 1; }
+  .placeholder { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--soft); }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.12); border-top-color: var(--ember); animation: spin 1s linear infinite; margin: 0 auto 14px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .placeholder b { display: block; color: var(--text); font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .placeholder small { display: block; font-size: 12.5px; margin-top: 6px; color: var(--faint); }
+
+  .pip {
+    position: absolute; right: 12px; top: 12px; width: 28%; max-width: 180px; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--line2); box-shadow: 0 8px 24px rgba(0,0,0,.5); background: #000; z-index: 3;
+  }
+  .pip video { width: 100%; height: 100%; object-fit: cover; }
+  .pip.mirror video { transform: scaleX(-1); }
+  .pip .tag { position: absolute; left: 8px; bottom: 6px; font-size: 11px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+
+  .captions {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 40px 18px 16px; text-align: center;
+    background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.72));
+    font-size: clamp(16px, 2.6vw, 21px); line-height: 1.35; font-weight: 550; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+    opacity: 0; transition: opacity .35s ease;
+  }
+  .captions.shown { opacity: 1; }
+  .captions .orig { display: block; margin-top: 5px; font-size: .72em; font-weight: 450; opacity: .72; }
+
+  .banner {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 4; font-size: 13px; padding: 7px 14px; border-radius: 999px;
+    background: rgba(20,20,24,.82); border: 1px solid var(--line2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+
+  .controls {
+    display: flex; gap: 10px; justify-content: center; align-items: center; padding: 10px; margin: 0 auto; border-radius: 999px;
+    background: rgba(30,30,36,.66); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .round {
+    width: 54px; height: 54px; border-radius: 50%; border: 1px solid var(--line2); background: rgba(255,255,255,.08); cursor: pointer;
+    display: grid; place-items: center; transition: background .15s, transform .1s;
+  }
+  .round:active { transform: scale(.96); }
+  .round.off { background: rgba(255,255,255,.92); color: #111; }
+  .round.leave { background: linear-gradient(180deg, #e5484d, #b3261e); border-color: rgba(255,255,255,.18); }
+  .round svg { width: 24px; height: 24px; }
+  .round .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(120% 70% at 50% 0%, rgba(255,122,77,.18), rgba(15,15,18,0) 60%), rgba(15,15,18,.94);
+  }
+  .card {
+    width: 100%; max-width: 420px; border-radius: 24px; padding: 26px 22px 22px; text-align: center;
+    background: linear-gradient(180deg, #202027, #18181d); border: 1px solid var(--line2);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .card .mark { width: 54px; height: 54px; border-radius: 16px; margin: 0 auto 14px; }
+  .card h1 { font-size: 21px; line-height: 1.25; margin: 0 0 8px; font-weight: 680; letter-spacing: .1px; }
+  .card p { margin: 0 0 6px; color: var(--soft); font-size: 15px; line-height: 1.45; }
+  .card p.en { font-size: 12.5px; color: var(--faint); margin-top: 8px; }
+  .primary {
+    margin-top: 18px; width: 100%; min-height: 54px; border: 0; border-radius: 999px; cursor: pointer; font-size: 17px; font-weight: 650; color: #fff;
+    background: linear-gradient(180deg, var(--emberA), var(--emberB));
+    box-shadow: 0 8px 24px rgba(188,71,32,.45), inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  .primary small { display: block; font-size: 11.5px; font-weight: 500; opacity: .85; }
+  .primary:active { filter: brightness(.94); }
+  .secondary { margin-top: 10px; width: 100%; min-height: 44px; border-radius: 999px; cursor: pointer; background: rgba(255,255,255,.06); border: 1px solid var(--line2); font-size: 15px; }
+  .steps { text-align: left; margin: 12px 0 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid var(--line); font-size: 13.5px; color: var(--soft); line-height: 1.5; }
+  .steps b { color: var(--text); font-weight: 600; }
+
+  .host .stage { min-height: 360px; }
+  .host .pip { width: 24%; max-width: 260px; aspect-ratio: 16 / 9; top: auto; bottom: 12px; }
+  .note { font-size: 12.5px; color: var(--faint); text-align: center; }
+  .meter { width: 120px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; margin: 12px auto 0; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--good); transition: width .12s; }
+
+  @media (min-width: 900px) { .stage { min-height: 520px; } .round { width: 58px; height: 58px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mark" viewBox="0 0 24 24"><path fill="#fff" d="M12 2.6l1.9 5.1 5.5.4-4.2 3.5 1.4 5.3L12 14l-4.6 2.9 1.4-5.3-4.2-3.5 5.5-.4z"/><circle cx="18.6" cy="18.4" r="2.1" fill="#fff" opacity=".85"/><circle cx="5.2" cy="19.6" r="1.3" fill="#fff" opacity=".65"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></symbol>
+  <symbol id="i-mic-off" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15 10V6a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 4.6 2.5M5.5 11.5a6.5 6.5 0 0 0 10.6 5M18.5 11.5c0 .7-.1 1.4-.3 2M12 18v3M4 4l16 16"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 7.5A1.5 1.5 0 0 1 4.5 6h9A1.5 1.5 0 0 1 15 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 3 16.5zM15 10.5l5-3v9l-5-3z"/></symbol>
+  <symbol id="i-cam-off" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 6h4.5A1.5 1.5 0 0 1 15 7.5V12m0 2.5v2A1.5 1.5 0 0 1 13.5 18h-9A1.5 1.5 0 0 1 3 16.5v-9A1.5 1.5 0 0 1 4.5 6M15 10.5l5-3v9l-2.5-1.5M3 3l18 18"/></symbol>
+  <symbol id="i-end" viewBox="0 0 24 24"><path fill="#fff" d="M12 9c-2.6 0-5 .5-7.2 1.6-.8.4-1.3 1.2-1.3 2.1v2.1c0 .8.7 1.4 1.5 1.3l2.9-.4c.7-.1 1.2-.7 1.2-1.4v-1.6c1.9-.5 4-.5 5.9 0v1.6c0 .7.5 1.3 1.2 1.4l2.9.4c.8.1 1.5-.5 1.5-1.3v-2.1c0-.9-.5-1.7-1.3-2.1C17 9.5 14.6 9 12 9z"/></symbol>
+</svg>
+
+<header>
+  <div class="mark" aria-hidden="true"><svg width="20" height="20"><use href="#i-mark"/></svg></div>
+  <div class="brand"><b>Texas Cleaning Services</b><span id="sub">Videollamada</span></div>
+  <div class="pills hidden" id="pills">
+    <span class="pill" id="pillGuest"><i></i><span>Her: waiting</span></span>
+    <span class="pill" id="pillPresenter"><i></i><span>You on her screen: starting</span></span>
+    <span class="pill" id="pillLink"><i></i><span>Connecting</span></span>
+  </div>
+</header>
+
+<main id="main" class="hidden">
+  <div class="stage" id="stage">
+    <video class="main" id="vA" playsinline autoplay muted></video>
+    <video class="main" id="vB" playsinline autoplay muted></video>
+    <div class="placeholder" id="ph"><div><div class="spinner"></div><b id="phTitle">Un momento, ya casi</b><span id="phText">Conectando con Texas Cleaning Services</span></div></div>
+    <div class="pip hidden" id="pip"><video id="pipV" playsinline autoplay muted></video><span class="tag" id="pipTag">Usted</span></div>
+    <div class="captions" id="captions" aria-live="polite"></div>
+    <div class="banner hidden" id="banner">Reconectando…</div>
+  </div>
+  <div class="controls" id="controls">
+    <button class="round" id="bMic" aria-pressed="true"><svg><use href="#i-mic"/></svg><span class="lbl">Micrófono</span></button>
+    <button class="round" id="bCam" aria-pressed="false"><svg><use href="#i-cam-off"/></svg><span class="lbl">Cámara</span></button>
+    <button class="round leave" id="bLeave"><svg><use href="#i-end"/></svg><span class="lbl">Salir</span></button>
+  </div>
+  <div class="note hidden" id="hostNote">This view only watches and listens: it never sends your camera or microphone. Keep it open: EAZ hears her through it.</div>
+</main>
+
+<div class="overlay" id="ov">
+  <div class="card" id="ovCard">
+    <div class="mark" aria-hidden="true"><svg width="30" height="30"><use href="#i-mark"/></svg></div>
+    <h1 id="ovTitle">Videollamada con Texas Cleaning Services</h1>
+    <p id="ovText">Toque Empezar. Le vamos a pedir permiso para usar su micrófono, para que podamos escucharle.</p>
+    <p class="en" id="ovEn">Tap Start. We will ask to use your microphone so we can hear you.</p>
+    <div class="steps hidden" id="ovSteps"></div>
+    <button class="primary" id="ovGo">Empezar<small>Start</small></button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.23.0/dist/livekit-client.umd.js"
+        integrity="sha384-HkA7rQNo8H04l1p4zoXX1Cy+h9YoYp8LvKt4vfMFhv4KFk07UkrNwIUnyBum8Pw6" crossorigin="anonymous"></script>
+<script>
+"use strict";
+
+// ---- Pure helpers (no page needed) ----
+const Logic = {
+  // The call's details from the link's # part, kept for a reload of this tab, then taken out of the address bar.
+  readLink(hash, stored) {
+    const p = new URLSearchParams((hash || "").replace(/^#/, ""));
+    const fromLink = p.get("u") && p.get("t");
+    const s = fromLink ? { url: p.get("u"), token: p.get("t"), camera: p.get("c") === "1", host: p.get("h") === "1" }
+                       : (stored ? JSON.parse(stored) : null);
+    if (!s || !/^wss?:\/\//i.test(s.url || "") || !/^[\w-]+\.[\w-]+\.[\w-]+$/.test(s.token || "")) return { call: null, fromLink: !!fromLink };
+    return { call: s, fromLink: !!fromLink };
+  },
+  // Seconds until the pass stops letting anyone join (the call itself keeps going past it).
+  tokenLeft(token, now) {
+    try {
+      const b = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const claims = JSON.parse(atob(b + "===".slice((b.length + 3) % 4)));
+      return typeof claims.exp === "number" ? claims.exp - now / 1000 : Infinity;
+    } catch (e) { return -1; }
+  },
+  meta(text) { try { return text ? JSON.parse(text) : {}; } catch (e) { return {}; } },
+  isPresenter(identity) { return /^tcs-\d+$/.test(identity || ""); },
+  // Who she sees: the one the room names, else the newest one in the room.
+  pickPresenter(meta, people) {
+    const here = people.filter(p => Logic.isPresenter(p.identity));
+    if (meta && meta.speaker && here.some(p => p.identity === meta.speaker)) return meta.speaker;
+    here.sort((a, b) => (b.joined || 0) - (a.joined || 0));
+    return here.length ? here[0].identity : null;
+  },
+  ended(meta) { return !!meta && meta.state === "ended"; },
+  // A room with no call in it (it was closed, and opening the link again made an empty one).
+  noCall(meta) { return !meta || !meta.state; },
+};
+if (typeof module !== "undefined") module.exports = Logic;
+
+// ---- The page ----
+if (typeof document !== "undefined") (function () {
+  const $ = id => document.getElementById(id);
+  const LK = window.LivekitClient;
+  let call = null, room = null, shownIn = null, shownWho = null, audioEl = null, joinedOnce = false, leaving = false, capTimer = 0;
+
+  function overlay(title, text, en, go, goEn, steps) {
+    $("ov").classList.remove("hidden");
+    $("ovTitle").textContent = title;
+    $("ovText").textContent = text || "";
+    $("ovEn").textContent = en || "";
+    $("ovEn").classList.toggle("hidden", !en);
+    $("ovSteps").classList.toggle("hidden", !steps);
+    if (steps) $("ovSteps").innerHTML = steps;
+    $("ovGo").classList.toggle("hidden", !go);
+    if (go) $("ovGo").innerHTML = escapeHTML(go) + (goEn ? "<small>" + escapeHTML(goEn) + "</small>" : "");
+  }
+  function hideOverlay() { $("ov").classList.add("hidden"); }
+  function escapeHTML(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  // ---- Reading the link ----
+  let stored = null;
+  try { stored = sessionStorage.getItem("tcs.call"); } catch (e) {}
+  const read = Logic.readLink(location.hash, stored);
+  call = read.call;
+  if (read.fromLink && call) {
+    try { sessionStorage.setItem("tcs.call", JSON.stringify(call)); } catch (e) {}
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  const host = !!(call && call.host);
+  if (host) {
+    document.documentElement.lang = "en";
+    document.body.classList.add("host");
+    document.title = "Your view · Texas Cleaning Services video call";
+    $("sub").textContent = "Your view of the call";
+    $("pills").classList.remove("hidden");
+    $("hostNote").classList.remove("hidden");
+    $("bMic").classList.add("hidden");
+    $("bCam").classList.add("hidden");
+    $("bLeave").classList.add("hidden");
+    $("controls").classList.add("hidden");
+    $("pipTag").textContent = "You, on her screen";
+  }
+
+  if (!LK) {
+    overlay("No se pudo abrir la llamada", "Revise su conexión a internet y vuelva a abrir el enlace.", "The call page could not load. Check your connection and open the link again.", "Volver a intentar", "Try again");
+    $("ovGo").onclick = () => location.reload();
+    return;
+  }
+  if (!call) {
+    overlay("Este enlace no funciona", "Pídale a Texas Cleaning Services un enlace nuevo.", "This link doesn't work. Ask Texas Cleaning Services for a new one.");
+    return;
+  }
+  if (Logic.tokenLeft(call.token, Date.now()) < 0) {
+    overlay("Este enlace ya venció", "Pídale a Texas Cleaning Services un enlace nuevo.", "This link has expired. Ask Texas Cleaning Services for a new one.");
+    return;
+  }
+
+  if (host) {
+    overlay("Your view of the call", "Click to see and hear her. This view never sends your camera or microphone, so she only hears you through EAZ.", "", "Open my view", "");
+  }
+  $("ovGo").onclick = () => start();
+
+  // ---- The room ----
+  async function start() {
+    $("ovGo").disabled = true;
+    room = new LK.Room({
+      adaptiveStream: true, dynacast: true,
+      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      videoCaptureDefaults: { resolution: { width: 640, height: 480, frameRate: 24 } },
+    });
+    wire(room);
+    room.startAudio().catch(() => {});          // inside the tap, so phones allow sound
+    try {
+      await room.connect(call.url, call.token, { autoSubscribe: !host });
+    } catch (e) {
+      $("ovGo").disabled = false;
+      return lost();
+    }
+    joinedOnce = true;
+    const meta = Logic.meta(room.metadata);
+    if (Logic.ended(meta) || Logic.noCall(meta)) { room.disconnect(); return finished(); }
+    hideOverlay();
+    $("main").classList.remove("hidden");
+    $("ovGo").disabled = false;
+    if (host) {
+      for (const p of room.remoteParticipants.values()) subscribeForHost(p);
+    } else {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (e) {
+        return needMic(e);
+      }
+      if (call.camera) await setCamera(true);
+      updateButtons();
+    }
+    refresh();
+    if (!room.canPlaybackAudio) needTap();
+  }
+
+  function wire(r) {
+    const E = LK.RoomEvent;
+    r.on(E.TrackSubscribed, () => refresh())
+     .on(E.TrackUnsubscribed, () => refresh())
+     .on(E.TrackPublished, (pub, p) => { if (host) subscribeForHost(p); refresh(); })
+     .on(E.TrackMuted, () => refresh())
+     .on(E.TrackUnmuted, () => refresh())
+     .on(E.ParticipantConnected, p => { if (host) subscribeForHost(p); refresh(); })
+     .on(E.ParticipantDisconnected, () => refresh())
+     .on(E.RoomMetadataChanged, () => { if (Logic.ended(Logic.meta(r.metadata))) { leaving = true; r.disconnect(); return finished(); } refresh(); })
+     .on(E.ActiveSpeakersChanged, () => { if (host) meter(); })
+     .on(E.AudioPlaybackStatusChanged, () => { if (!r.canPlaybackAudio) needTap(); })
+     .on(E.Reconnecting, () => banner(host ? "Reconnecting…" : "Reconectando…"))
+     .on(E.Reconnected, () => banner(null))
+     .on(E.DataReceived, (payload, participant, kind, topic) => {
+       if (topic === "captions") caption(payload);
+       else if (topic === "captions-host" && host) hostCaption(payload);     // 4.0.1: her words, in English, in his view
+     })
+     .on(E.Disconnected, reason => {
+       banner(null);
+       const R = LK.DisconnectReason || {};
+       if (leaving || reason === R.CLIENT_INITIATED) return;
+       if (reason === R.ROOM_DELETED || reason === R.PARTICIPANT_REMOVED || Logic.ended(Logic.meta(r.metadata))) return finished();
+       lost();
+     });
+  }
+
+  // His view: her camera and voice, and the picture of him she sees, never its sound (so EAZ only ever hears her).
+  function subscribeForHost(p) {
+    for (const pub of p.trackPublications.values()) {
+      const want = p.identity === "guest" || (Logic.isPresenter(p.identity) && pub.kind === LK.Track.Kind.Video);
+      if (pub.isSubscribed !== want) pub.setSubscribed(want);
+    }
+  }
+
+  function people() {
+    return [...room.remoteParticipants.values()].map(p => ({ identity: p.identity, joined: p.joinedAt ? p.joinedAt.getTime() : 0, p }));
+  }
+
+  function trackOf(p, kind) {
+    for (const pub of p.trackPublications.values()) if (pub.kind === kind && pub.track && !pub.isMuted) return pub.track;
+    return null;
+  }
+
+  function refresh() {
+    if (!room) return;
+    const ps = people();
+    const meta = Logic.meta(room.metadata);
+    const who = Logic.pickPresenter(meta, ps);
+    const presenter = who ? ps.find(x => x.identity === who).p : null;
+    const guest = ps.find(x => x.identity === "guest");
+    if (host) {
+      show(guest ? trackOf(guest.p, LK.Track.Kind.Video) : null, "guest");
+      playAudio(guest ? trackOf(guest.p, LK.Track.Kind.Audio) : null);
+      pip(presenter ? trackOf(presenter, LK.Track.Kind.Video) : null, false);
+      pills(!!guest, !!(presenter && trackOf(presenter, LK.Track.Kind.Video)));
+      placeholder(guest ? (trackOf(guest.p, LK.Track.Kind.Video) ? null : ["Her camera is off", "You hear her through this window."]) : ["Waiting for her", "She joins when she opens her link."]);
+    } else {
+      const v = presenter ? trackOf(presenter, LK.Track.Kind.Video) : null;
+      show(v, who);
+      playAudio(presenter ? trackOf(presenter, LK.Track.Kind.Audio) : null);
+      placeholder(v ? null : ["Un momento, ya casi", "Conectando con Texas Cleaning Services"]);
+    }
+  }
+
+  // The big picture, with a short crossfade when it changes to someone new.
+  function show(track, who) {
+    const a = $("vA"), b = $("vB");
+    const cur = shownIn === "A" ? a : shownIn === "B" ? b : null;
+    if (!track) {
+      if (cur) { cur.classList.remove("shown"); setTimeout(() => { if (!shownIn) detachAll(cur); }, 320); }
+      shownIn = null; shownWho = null;
+      return;
+    }
+    if (cur && shownWho === who && cur.__track === track) return;
+    const next = cur === a ? b : a;
+    detachAll(next);
+    track.attach(next);
+    next.__track = track;
+    const reveal = () => {
+      next.classList.add("shown");
+      if (cur) { cur.classList.remove("shown"); setTimeout(() => detachAll(cur), 320); }
+    };
+    if (next.readyState >= 2) reveal(); else next.addEventListener("loadeddata", reveal, { once: true });
+    shownIn = next === a ? "A" : "B";
+    shownWho = who;
+  }
+
+  // Takes a picture off an element (the track itself keeps running: it belongs to the room).
+  function detachAll(el) {
+    if (el.__track) { el.__track.detach(el); el.__track = null; }
+    el.srcObject = null;
+  }
+
+  function playAudio(track) {
+    if (audioEl && audioEl.__track === track) return;
+    if (audioEl) { if (audioEl.__track) audioEl.__track.detach(audioEl); audioEl.remove(); audioEl = null; }
+    if (!track) return;
+    audioEl = track.attach();
+    audioEl.__track = track;
+    audioEl.setAttribute("playsinline", "");
+    document.body.appendChild(audioEl);
+  }
+
+  function pip(track, mirror) {
+    const box = $("pip"), v = $("pipV");
+    if (!track) { box.classList.add("hidden"); detachAll(v); return; }
+    box.classList.toggle("mirror", mirror);
+    if (v.__track !== track) { detachAll(v); track.attach(v); v.__track = track; }
+    box.classList.remove("hidden");
+  }
+
+  function placeholder(lines) {
+    $("ph").classList.toggle("hidden", !lines);
+    if (lines) { $("phTitle").textContent = lines[0]; $("phText").textContent = lines[1]; }
+  }
+
+  function pills(guestHere, presenterHere) {
+    setPill("pillGuest", guestHere ? "on" : "wait", guestHere ? "Her: here" : "Her: waiting");
+    setPill("pillPresenter", presenterHere ? "on" : "wait", presenterHere ? "You on her screen: live" : "You on her screen: starting");
+    setPill("pillLink", "on", "Connected");
+  }
+  function setPill(id, cls, text) { const el = $(id); el.className = "pill " + cls; el.querySelector("span").textContent = text; }
+
+  function meter() {
+    const g = people().find(x => x.identity === "guest");
+    const level = g ? g.p.audioLevel || 0 : 0;
+    let m = document.getElementById("hostMeter");
+    if (!m) { m = document.createElement("div"); m.className = "meter"; m.id = "hostMeter"; m.innerHTML = "<i></i>"; $("ph").firstElementChild.appendChild(m); }
+    m.firstElementChild.style.width = Math.min(100, Math.round(level * 140)) + "%";
+  }
+
+  function caption(payload) {
+    let text = "";
+    try { text = JSON.parse(new TextDecoder().decode(payload)).t || ""; } catch (e) { return; }
+    const el = $("captions");
+    el.textContent = text;
+    el.classList.toggle("shown", !!text);
+    clearTimeout(capTimer);
+    capTimer = setTimeout(() => el.classList.remove("shown"), 7000);
+  }
+
+  // 4.0.1: in his view, what she's saying in English as she talks (and what she said, smaller). Text only, never HTML.
+  function hostCaption(payload) {
+    let o = {};
+    try { o = JSON.parse(new TextDecoder().decode(payload)) || {}; } catch (e) { return; }
+    const el = $("captions");
+    el.textContent = "";
+    const en = document.createElement("span"); en.textContent = o.t || "";
+    el.appendChild(en);
+    if (o.o) { const orig = document.createElement("span"); orig.className = "orig"; orig.textContent = o.o; el.appendChild(orig); }
+    el.classList.toggle("shown", !!o.t);
+    clearTimeout(capTimer);
+    capTimer = setTimeout(() => el.classList.remove("shown"), o.f ? 9000 : 15000);
+  }
+
+  function banner(text) {
+    $("banner").classList.toggle("hidden", !text);
+    if (text) $("banner").textContent = text;
+    if (host) setPill("pillLink", text ? "wait" : "on", text ? "Reconnecting" : "Connected");
+  }
+
+  // ---- Her microphone and camera ----
+  async function setCamera(on) {
+    try {
+      await room.localParticipant.setCameraEnabled(on);
+    } catch (e) {
+      banner("No se pudo usar la cámara");
+      setTimeout(() => banner(null), 3500);
+    }
+    const pub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+    pip(on && pub && pub.track ? pub.track : null, true);
+    updateButtons();
+  }
+
+  function updateButtons() {
+    const lp = room.localParticipant;
+    const mic = lp.isMicrophoneEnabled, cam = lp.isCameraEnabled;
+    $("bMic").classList.toggle("off", !mic);
+    $("bMic").setAttribute("aria-pressed", String(mic));
+    $("bMic").querySelector("use").setAttribute("href", mic ? "#i-mic" : "#i-mic-off");
+    $("bMic").querySelector(".lbl").textContent = mic ? "Silenciar micrófono" : "Activar micrófono";
+    $("bCam").classList.toggle("off", false);
+    $("bCam").setAttribute("aria-pressed", String(cam));
+    $("bCam").querySelector("use").setAttribute("href", cam ? "#i-cam" : "#i-cam-off");
+    $("bCam").querySelector(".lbl").textContent = cam ? "Apagar cámara" : "Encender cámara";
+  }
+
+  $("bMic").onclick = async () => {
+    try { await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled); } catch (e) { return needMic(e); }
+    updateButtons();
+  };
+  $("bCam").onclick = () => setCamera(!room.localParticipant.isCameraEnabled);
+  $("bLeave").onclick = () => {
+    leaving = true;
+    if (room) room.disconnect();
+    overlay("Salió de la llamada", "Puede volver a entrar con el mismo enlace.", "You left the call. You can come back with the same link.", "Volver a entrar", "Rejoin");
+    $("ovGo").onclick = () => { leaving = false; start(); };
+  };
+
+  // ---- When something needs her ----
+  function needMic(e) {
+    const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const steps = iphone
+      ? "<b>iPhone:</b> toque <b>aA</b> en la barra de dirección, luego <b>Configuración del sitio web</b>, y permita el <b>Micrófono</b>. Después toque Intentar de nuevo."
+      : "Toque el <b>candado</b> junto a la dirección de la página, permita el <b>Micrófono</b>, y toque Intentar de nuevo.";
+    overlay("Necesitamos su micrófono", "Así podemos escucharle durante la llamada.", "We need your microphone so we can hear you. Allow it, then tap Try again.", "Intentar de nuevo", "Try again", steps);
+    $("ovGo").disabled = false;
+    $("ovGo").onclick = async () => {
+      try { await room.localParticipant.setMicrophoneEnabled(true); hideOverlay(); updateButtons(); refresh(); }
+      catch (err) { needMic(err); }
+    };
+  }
+
+  function needTap() {
+    if (host) overlay("Click to hear her", "Your browser waits for a click before it plays sound.", "", "Play sound", "");
+    else overlay("Toque para escuchar", "Su teléfono necesita un toque para poner el sonido.", "Tap so your phone plays the sound.", "Escuchar", "Listen");
+    $("ovGo").disabled = false;
+    $("ovGo").onclick = () => room.startAudio().then(hideOverlay).catch(hideOverlay);
+  }
+
+  function lost() {
+    $("main").classList.add("hidden");
+    if (host) overlay("Your view lost the call", "Check the internet connection, then join again.", "", "Join again", "");
+    else overlay("Se perdió la conexión", "Revise su internet y vuelva a entrar.", "The connection was lost. Check your internet and join again.", "Volver a entrar", "Rejoin");
+    $("ovGo").disabled = false;
+    $("ovGo").onclick = () => { if (Logic.tokenLeft(call.token, Date.now()) < 0 && !joinedOnce) return location.reload(); start(); };
+  }
+
+  function finished() {
+    $("main").classList.add("hidden");
+    try { sessionStorage.removeItem("tcs.call"); } catch (e) {}
+    if (host) overlay("The call has ended", "You can close this window.", "");
+    else overlay("La llamada terminó", "¡Gracias por su tiempo! Ya puede cerrar esta página.", "The call has ended. Thank you for your time.");
+  }
+
+  window.addEventListener("pagehide", () => { leaving = true; if (room) room.disconnect(); });
+})();
+</script>
+</body>
+</html>
