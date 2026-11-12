@@ -70,7 +70,7 @@
   .stage video.main { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .28s ease; background: #000; }
   .stage video.main.shown { opacity: 1; }
   /* 4.0.3: the last picture, held while the connection comes back, then faded into the live video (no jump) */
-  .stage canvas.freeze { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+  .stage canvas.freeze { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
   .stage canvas.freeze.shown { opacity: 1; }
   .placeholder { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--soft); }
   .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.12); border-top-color: var(--ember); animation: spin 1s linear infinite; margin: 0 auto 14px; }
@@ -259,7 +259,10 @@ if (typeof document !== "undefined") (function () {
   const $ = id => document.getElementById(id);
   const LK = window.LivekitClient;
   let call = null, room = null, shownIn = null, shownWho = null, audioEl = null, joinedOnce = false, leaving = false, capTimer = 0;
-  let host = false, frozen = false, holdTimer = 0, hiddenByPage = false;
+  let host = false, frozen = false, holdTimer = 0, hiddenByPage = false, retries = 0, wakeLock = null;
+  // 4.0.3: a copy of the picture every half second while it's healthy, so a dropped picture is held at a good frame.
+  const grab = document.createElement("canvas");
+  let grabbed = false;
 
   function overlay(title, text, en, go, goEn, steps) {
     $("ov").classList.remove("hidden");
@@ -359,9 +362,11 @@ if (typeof document !== "undefined") (function () {
       await room.connect(call.url, call.token, { autoSubscribe: !host });
     } catch (e) {
       $("ovGo").disabled = false;
-      return lost();
+      return retryOrLost();
     }
     joinedOnce = true;
+    retries = 0;
+    if (!host) keepAwake();
     const meta = Logic.meta(room.metadata);
     if (Logic.ended(meta) || Logic.noCall(meta)) { room.disconnect(); return finished(); }
     hideOverlay();
@@ -405,7 +410,7 @@ if (typeof document !== "undefined") (function () {
        const R = LK.DisconnectReason || {};
        if (leaving || reason === R.CLIENT_INITIATED) return;
        if (reason === R.ROOM_DELETED || reason === R.PARTICIPANT_REMOVED || Logic.ended(Logic.meta(r.metadata))) return finished();
-       lost();
+       retryOrLost();
      });
   }
 
@@ -479,10 +484,12 @@ if (typeof document !== "undefined") (function () {
   // The held picture (a copy of the video's last frame on a canvas above it).
   function hold(el) {
     const c = $("vFreeze");
-    if (frozen || !el.videoWidth) return;
+    if (frozen) return;
     try {
-      c.width = el.videoWidth; c.height = el.videoHeight;
-      c.getContext("2d").drawImage(el, 0, 0, c.width, c.height);
+      const src = grabbed ? grab : (el.videoWidth && el.readyState >= 2 ? el : null);
+      if (!src) return;
+      c.width = src.width || src.videoWidth; c.height = src.height || src.videoHeight;
+      c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
     } catch (e) { return; }
     frozen = true;
     c.classList.add("shown");
@@ -494,6 +501,33 @@ if (typeof document !== "undefined") (function () {
     if (!frozen) return;
     frozen = false;
     $("vFreeze").classList.remove("shown");
+  }
+  setInterval(() => {
+    if (host || frozen || !shownIn) return;
+    const v = shownIn === "A" ? $("vA") : $("vB");
+    if (!v.videoWidth || v.readyState < 2) return;
+    try {
+      if (grab.width !== v.videoWidth || grab.height !== v.videoHeight) { grab.width = v.videoWidth; grab.height = v.videoHeight; }
+      grab.getContext("2d").drawImage(v, 0, 0, grab.width, grab.height);
+      grabbed = true;
+    } catch (e) {}
+  }, 500);
+
+  // 4.0.3: phones stay awake during the call (a sleeping phone drops it), and a dropped call rejoins on its own a few
+  // times, holding the last picture, before asking them to tap.
+  async function keepAwake() {
+    try { if ("wakeLock" in navigator && document.visibilityState === "visible") wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && joinedOnce && !host && !leaving) keepAwake(); });
+  function retryOrLost() {
+    if (joinedOnce && !leaving && retries < 3 && call && Logic.tokenLeft(call.token, Date.now()) > 0) {
+      retries++;
+      banner(host ? "Reconnecting…" : "Reconectando…");
+      setTimeout(() => { if (!leaving) start(); }, 1500 * retries);
+      return;
+    }
+    banner(null);
+    lost();
   }
 
   // Takes a picture off an element (the track itself keeps running: it belongs to the room).
