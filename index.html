@@ -9,9 +9,14 @@
 <meta name="theme-color" content="#0f0f12">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https: wss: ws://localhost:* ws://127.0.0.1:*; media-src blob: mediastream:; img-src data: blob:; base-uri 'none'; form-action 'none'">
 <title>Videollamada · Texas Cleaning Services</title>
+<meta property="og:title" content="Videollamada · Texas Cleaning Services">
+<meta property="og:description" content="Toque el enlace para entrar a la videollamada.">
+<meta name="eaz-links" content="https://raw.githubusercontent.com/TCS-MGMT/video-interview/links/l/">
 <!-- One page for both sides of a Texas Cleaning Services video call. The call's details come after the # in the link
      (u = the room server, t = the pass for this call, c=1 = ask for the camera, h=1 = the organizer's own view), so they
-     never reach this site's server. Nothing here is sent anywhere but the call room. -->
+     never reach this site's server. A short link (4.0.3) has only 14 letters and digits after the #: the key to a locked
+     copy of those details, which this page fetches by a name made from the key and opens in the browser. Nothing here is
+     sent anywhere but the call room. -->
 <style>
   :root {
     --page: #0f0f12; --card: #1b1b20; --card2: #24242b; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14);
@@ -64,6 +69,9 @@
   }
   .stage video.main { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .28s ease; background: #000; }
   .stage video.main.shown { opacity: 1; }
+  /* 4.0.3: the last picture, held while the connection comes back, then faded into the live video (no jump) */
+  .stage canvas.freeze { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+  .stage canvas.freeze.shown { opacity: 1; }
   .placeholder { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--soft); }
   .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.12); border-top-color: var(--ember); animation: spin 1s linear infinite; margin: 0 auto 14px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -155,8 +163,8 @@
   <div class="mark" aria-hidden="true"><svg width="20" height="20"><use href="#i-mark"/></svg></div>
   <div class="brand"><b>Texas Cleaning Services</b><span id="sub">Videollamada</span></div>
   <div class="pills hidden" id="pills">
-    <span class="pill" id="pillGuest"><i></i><span>Her: waiting</span></span>
-    <span class="pill" id="pillPresenter"><i></i><span>You on her screen: starting</span></span>
+    <span class="pill" id="pillGuest"><i></i><span>Guest: waiting</span></span>
+    <span class="pill" id="pillPresenter"><i></i><span>You on their screen: starting</span></span>
     <span class="pill" id="pillLink"><i></i><span>Connecting</span></span>
   </div>
 </header>
@@ -165,6 +173,7 @@
   <div class="stage" id="stage">
     <video class="main" id="vA" playsinline autoplay muted></video>
     <video class="main" id="vB" playsinline autoplay muted></video>
+    <canvas class="freeze" id="vFreeze" aria-hidden="true"></canvas>
     <div class="placeholder" id="ph"><div><div class="spinner"></div><b id="phTitle">Un momento, ya casi</b><span id="phText">Conectando con Texas Cleaning Services</span></div></div>
     <div class="pip hidden" id="pip"><video id="pipV" playsinline autoplay muted></video><span class="tag" id="pipTag">Usted</span></div>
     <div class="captions" id="captions" aria-live="polite"></div>
@@ -175,7 +184,7 @@
     <button class="round" id="bCam" aria-pressed="false"><svg><use href="#i-cam-off"/></svg><span class="lbl">Cámara</span></button>
     <button class="round leave" id="bLeave"><svg><use href="#i-end"/></svg><span class="lbl">Salir</span></button>
   </div>
-  <div class="note hidden" id="hostNote">This view only watches and listens: it never sends your camera or microphone. Keep it open: EAZ hears her through it.</div>
+  <div class="note hidden" id="hostNote">This view only watches and listens: it never sends your camera or microphone. Keep it open: EAZ hears them through it.</div>
 </main>
 
 <div class="overlay" id="ov">
@@ -215,7 +224,7 @@ const Logic = {
   },
   meta(text) { try { return text ? JSON.parse(text) : {}; } catch (e) { return {}; } },
   isPresenter(identity) { return /^tcs-\d+$/.test(identity || ""); },
-  // Who she sees: the one the room names, else the newest one in the room.
+  // Who they see: the one the room names, else the newest one in the room.
   pickPresenter(meta, people) {
     const here = people.filter(p => Logic.isPresenter(p.identity));
     if (meta && meta.speaker && here.some(p => p.identity === meta.speaker)) return meta.speaker;
@@ -223,6 +232,23 @@ const Logic = {
     return here.length ? here[0].identity : null;
   },
   ended(meta) { return !!meta && meta.state === "ended"; },
+  // 4.0.3: a short link's key (14 letters and digits after the #), else null.
+  shortKey(hash) { const m = /^#?([A-Za-z0-9]{14})$/.exec(hash || ""); return m ? m[1] : null; },
+  async sha256(text) { return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))); },
+  // The locked file's name: the first 12 hex digits of SHA-256("eaz-link-file:" + key) (EAZ's ShortLink.fileID).
+  async fileID(key) { const h = await Logic.sha256("eaz-link-file:" + key); return [...h.slice(0, 6)].map(b => b.toString(16).padStart(2, "0")).join(""); },
+  // The call's details from the locked file (AES-GCM with SHA-256("eaz-link-key:" + key)), or null.
+  async openSealed(text, key, now) {
+    let o;
+    try { o = JSON.parse(text); } catch (e) { return null; }
+    if (!o || o.v !== 1 || typeof o.iv !== "string" || typeof o.ct !== "string") return null;
+    if (typeof o.exp === "number" && o.exp * 1000 < now) return null;
+    try {
+      const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+      const k = await crypto.subtle.importKey("raw", await Logic.sha256("eaz-link-key:" + key), "AES-GCM", false, ["decrypt"]);
+      return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(o.iv) }, k, b64(o.ct)));
+    } catch (e) { return null; }
+  },
   // A room with no call in it (it was closed, and opening the link again made an empty one).
   noCall(meta) { return !meta || !meta.state; },
 };
@@ -233,6 +259,7 @@ if (typeof document !== "undefined") (function () {
   const $ = id => document.getElementById(id);
   const LK = window.LivekitClient;
   let call = null, room = null, shownIn = null, shownWho = null, audioEl = null, joinedOnce = false, leaving = false, capTimer = 0;
+  let host = false, frozen = false, holdTimer = 0, hiddenByPage = false;
 
   function overlay(title, text, en, go, goEn, steps) {
     $("ov").classList.remove("hidden");
@@ -251,13 +278,37 @@ if (typeof document !== "undefined") (function () {
   // ---- Reading the link ----
   let stored = null;
   try { stored = sessionStorage.getItem("tcs.call"); } catch (e) {}
-  const read = Logic.readLink(location.hash, stored);
+  const shortKey = Logic.shortKey(location.hash);
+  if (shortKey) {
+    overlay("Abriendo su videollamada…", "", "Opening your video call…");
+    openShort(shortKey).then(fragment => begin(fragment ? Logic.readLink("#" + fragment, null) : { call: null, fromLink: true }));
+  } else {
+    begin(Logic.readLink(location.hash, stored));
+  }
+
+  // 4.0.3: the locked copy of the call's details, from the address in this page's eaz-links tag (a few tries, in case
+  // it was saved a moment ago).
+  async function openShort(key) {
+    const base = (document.querySelector('meta[name="eaz-links"]') || {}).content || "";
+    let id;
+    try { id = await Logic.fileID(key); } catch (e) { return null; }
+    for (let i = 0; i < 3; i++) {
+      try {
+        const r = await fetch(base + id + ".json", { cache: "no-store", referrerPolicy: "no-referrer" });
+        if (r.ok) return await Logic.openSealed(await r.text(), key, Date.now());
+      } catch (e) {}
+      await new Promise(res => setTimeout(res, 1500));
+    }
+    return null;
+  }
+
+  function begin(read) {
   call = read.call;
   if (read.fromLink && call) {
     try { sessionStorage.setItem("tcs.call", JSON.stringify(call)); } catch (e) {}
     history.replaceState(null, "", location.pathname + location.search);
   }
-  const host = !!(call && call.host);
+  host = !!(call && call.host);
   if (host) {
     document.documentElement.lang = "en";
     document.body.classList.add("host");
@@ -269,7 +320,7 @@ if (typeof document !== "undefined") (function () {
     $("bCam").classList.add("hidden");
     $("bLeave").classList.add("hidden");
     $("controls").classList.add("hidden");
-    $("pipTag").textContent = "You, on her screen";
+    $("pipTag").textContent = "You, on their screen";
   }
 
   if (!LK) {
@@ -287,9 +338,12 @@ if (typeof document !== "undefined") (function () {
   }
 
   if (host) {
-    overlay("Your view of the call", "Click to see and hear her. This view never sends your camera or microphone, so she only hears you through EAZ.", "", "Open my view", "");
+    overlay("Your view of the call", "Click to see and hear them. This view never sends your camera or microphone, so they only hear you through EAZ.", "", "Open my view", "");
+  } else {
+    overlay("Videollamada con Texas Cleaning Services", "Toque Empezar. Le vamos a pedir permiso para usar su micrófono, para que podamos escucharle.", "Tap Start. We will ask to use your microphone so we can hear you.", "Empezar", "Start");
   }
   $("ovGo").onclick = () => start();
+  }
 
   // ---- The room ----
   async function start() {
@@ -344,7 +398,7 @@ if (typeof document !== "undefined") (function () {
      .on(E.Reconnected, () => banner(null))
      .on(E.DataReceived, (payload, participant, kind, topic) => {
        if (topic === "captions") caption(payload);
-       else if (topic === "captions-host" && host) hostCaption(payload);     // 4.0.1: her words, in English, in his view
+       else if (topic === "captions-host" && host) hostCaption(payload);     // 4.0.1: their words, in English, in his view
      })
      .on(E.Disconnected, reason => {
        banner(null);
@@ -355,7 +409,7 @@ if (typeof document !== "undefined") (function () {
      });
   }
 
-  // His view: her camera and voice, and the picture of him she sees, never its sound (so EAZ only ever hears her).
+  // His view: their camera and voice, and the picture of him they see, never its sound (so EAZ only ever hears them).
   function subscribeForHost(p) {
     for (const pub of p.trackPublications.values()) {
       const want = p.identity === "guest" || (Logic.isPresenter(p.identity) && pub.kind === LK.Track.Kind.Video);
@@ -384,21 +438,26 @@ if (typeof document !== "undefined") (function () {
       playAudio(guest ? trackOf(guest.p, LK.Track.Kind.Audio) : null);
       pip(presenter ? trackOf(presenter, LK.Track.Kind.Video) : null, false);
       pills(!!guest, !!(presenter && trackOf(presenter, LK.Track.Kind.Video)));
-      placeholder(guest ? (trackOf(guest.p, LK.Track.Kind.Video) ? null : ["Her camera is off", "You hear her through this window."]) : ["Waiting for her", "She joins when she opens her link."]);
+      placeholder(guest ? (trackOf(guest.p, LK.Track.Kind.Video) ? null : ["Their camera is off", "You hear them through this window."]) : ["Waiting for them", "They join when they open their link."]);
     } else {
       const v = presenter ? trackOf(presenter, LK.Track.Kind.Video) : null;
       show(v, who);
       playAudio(presenter ? trackOf(presenter, LK.Track.Kind.Audio) : null);
-      placeholder(v ? null : ["Un momento, ya casi", "Conectando con Texas Cleaning Services"]);
+      placeholder(v || frozen ? null : ["Un momento, ya casi", "Conectando con Texas Cleaning Services"]);
     }
   }
 
-  // The big picture, with a short crossfade when it changes to someone new.
+  // The big picture, with a short crossfade when it changes to someone new. 4.0.3 (11/11: "he cut out and reset ... like
+  // he teleported"): when the picture goes (their connection hiccups, or the copy restarts), the last picture stays up
+  // for up to 10 seconds and the live video fades in over it when it's back, instead of a gap and a jump.
   function show(track, who) {
     const a = $("vA"), b = $("vB");
     const cur = shownIn === "A" ? a : shownIn === "B" ? b : null;
     if (!track) {
-      if (cur) { cur.classList.remove("shown"); setTimeout(() => { if (!shownIn) detachAll(cur); }, 320); }
+      if (cur) {
+        if (!host) hold(cur);
+        cur.classList.remove("shown"); setTimeout(() => { if (!shownIn) detachAll(cur); }, 320);
+      }
       shownIn = null; shownWho = null;
       return;
     }
@@ -410,10 +469,31 @@ if (typeof document !== "undefined") (function () {
     const reveal = () => {
       next.classList.add("shown");
       if (cur) { cur.classList.remove("shown"); setTimeout(() => detachAll(cur), 320); }
+      release();
     };
     if (next.readyState >= 2) reveal(); else next.addEventListener("loadeddata", reveal, { once: true });
     shownIn = next === a ? "A" : "B";
     shownWho = who;
+  }
+
+  // The held picture (a copy of the video's last frame on a canvas above it).
+  function hold(el) {
+    const c = $("vFreeze");
+    if (frozen || !el.videoWidth) return;
+    try {
+      c.width = el.videoWidth; c.height = el.videoHeight;
+      c.getContext("2d").drawImage(el, 0, 0, c.width, c.height);
+    } catch (e) { return; }
+    frozen = true;
+    c.classList.add("shown");
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => { release(); refresh(); }, 10000);
+  }
+  function release() {
+    clearTimeout(holdTimer); holdTimer = 0;
+    if (!frozen) return;
+    frozen = false;
+    $("vFreeze").classList.remove("shown");
   }
 
   // Takes a picture off an element (the track itself keeps running: it belongs to the room).
@@ -446,8 +526,8 @@ if (typeof document !== "undefined") (function () {
   }
 
   function pills(guestHere, presenterHere) {
-    setPill("pillGuest", guestHere ? "on" : "wait", guestHere ? "Her: here" : "Her: waiting");
-    setPill("pillPresenter", presenterHere ? "on" : "wait", presenterHere ? "You on her screen: live" : "You on her screen: starting");
+    setPill("pillGuest", guestHere ? "on" : "wait", guestHere ? "Guest: here" : "Guest: waiting");
+    setPill("pillPresenter", presenterHere ? "on" : "wait", presenterHere ? "You on their screen: live" : "You on their screen: starting");
     setPill("pillLink", "on", "Connected");
   }
   function setPill(id, cls, text) { const el = $(id); el.className = "pill " + cls; el.querySelector("span").textContent = text; }
@@ -470,7 +550,7 @@ if (typeof document !== "undefined") (function () {
     capTimer = setTimeout(() => el.classList.remove("shown"), 7000);
   }
 
-  // 4.0.1: in his view, what she's saying in English as she talks (and what she said, smaller). Text only, never HTML.
+  // 4.0.1: in his view, what they're saying in English as they talk (and what they said, smaller). Text only, never HTML.
   function hostCaption(payload) {
     let o = {};
     try { o = JSON.parse(new TextDecoder().decode(payload)) || {}; } catch (e) { return; }
@@ -490,7 +570,7 @@ if (typeof document !== "undefined") (function () {
     if (host) setPill("pillLink", text ? "wait" : "on", text ? "Reconnecting" : "Connected");
   }
 
-  // ---- Her microphone and camera ----
+  // ---- Their microphone and camera ----
   async function setCamera(on) {
     try {
       await room.localParticipant.setCameraEnabled(on);
@@ -528,7 +608,7 @@ if (typeof document !== "undefined") (function () {
     $("ovGo").onclick = () => { leaving = false; start(); };
   };
 
-  // ---- When something needs her ----
+  // ---- When something needs them ----
   function needMic(e) {
     const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent);
     const steps = iphone
@@ -543,7 +623,7 @@ if (typeof document !== "undefined") (function () {
   }
 
   function needTap() {
-    if (host) overlay("Click to hear her", "Your browser waits for a click before it plays sound.", "", "Play sound", "");
+    if (host) overlay("Click to hear them", "Your browser waits for a click before it plays sound.", "", "Play sound", "");
     else overlay("Toque para escuchar", "Su teléfono necesita un toque para poner el sonido.", "Tap so your phone plays the sound.", "Escuchar", "Listen");
     $("ovGo").disabled = false;
     $("ovGo").onclick = () => room.startAudio().then(hideOverlay).catch(hideOverlay);
@@ -564,7 +644,11 @@ if (typeof document !== "undefined") (function () {
     else overlay("La llamada terminó", "¡Gracias por su tiempo! Ya puede cerrar esta página.", "The call has ended. Thank you for your time.");
   }
 
-  window.addEventListener("pagehide", () => { leaving = true; if (room) room.disconnect(); });
+  window.addEventListener("pagehide", e => { hiddenByPage = !!e.persisted; leaving = true; if (room) room.disconnect(); });
+  // 4.0.3: a phone that puts the page away and brings it back (from its page cache) rejoins on its own.
+  window.addEventListener("pageshow", e => {
+    if (e.persisted && hiddenByPage && joinedOnce && call && !host) { hiddenByPage = false; leaving = false; start(); }
+  });
 })();
 </script>
 </body>
